@@ -1,97 +1,52 @@
 package it.appmessaggi;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.util.Collections;
+
+import org.java_websocket.server.WebSocketServer;
+import org.java_websocket.WebSocket;
+import org.java_websocket.handshake.ClientHandshake;
+
+import java.net.InetSocketAddress;
 import java.util.HashSet;
-import java.util.Scanner;
 import java.util.Set;
 
-public class ChatServer {
-    private Scanner scanner = new Scanner(System.in);
-    private static Set<PrintWriter> clientWriters = Collections.synchronizedSet(new HashSet<>());
-    private int PORT = 0;
+public class ChatServer extends WebSocketServer {
 
-    public ChatServer(){
-        
-        int PORT = Integer.parseInt(System.getenv().getOrDefault("PORT", "5000"));
+    private static Set<WebSocket> clients = new HashSet<>();
 
-        System.out.println("Server avviato sulla porta " + PORT);
+    public ChatServer(int port) {
+        super(new InetSocketAddress(port));
+    }
 
-        try (ServerSocket serverSocket = new ServerSocket(PORT)) {
-            while (true) {
-                Socket clientSocket = serverSocket.accept();
+    @Override
+    public void onOpen(WebSocket conn, ClientHandshake handshake) {
+        clients.add(conn);
+        System.out.println("Nuovo client connesso");
+    }
 
-                System.out.println(
-                    "Nuovo utente connesso: " +
-                    clientSocket.getRemoteSocketAddress()
-                );
-
-                new Thread(new ClientHandler(clientSocket)).start();
-            }
-
-        } catch (IOException e) {
-            e.printStackTrace();
+    @Override
+    public void onMessage(WebSocket conn, String message) {
+        // broadcast a tutti
+        for (WebSocket client : clients) {
+            client.send(message);
         }
+    }
+
+    @Override
+    public void onClose(WebSocket conn, int code, String reason, boolean remote) {
+        clients.remove(conn);
+    }
+
+    @Override
+    public void onError(WebSocket conn, Exception ex) {
+        ex.printStackTrace();
+    }
+
+    @Override
+    public void onStart() {
+        System.out.println("Server WebSocket avviato");
     }
 
     public static void main(String[] args) {
-        new ChatServer();
+        int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "5000"));
+        new ChatServer(port).start();
     }
-    
-    public static void broadcast(String message) {
-        synchronized (clientWriters) {
-            for (PrintWriter writer : clientWriters) {
-                writer.println(message);
-            }
-        }
-    }
-
-    private static class ClientHandler implements Runnable {
-        private Socket socket;
-        private PrintWriter out;
-        private BufferedReader in;
-        private String username;
-
-        public ClientHandler(Socket socket) {
-            this.socket = socket;
-        }
-
-        @Override
-        public void run() {
-            try {
-                in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                out = new PrintWriter(socket.getOutputStream(), true);
-
-                clientWriters.add(out);
-
-                username = in.readLine();
-                broadcast(username + " si è unito alla chat!");
-
-                String message;
-                while ((message = in.readLine()) != null) {
-                    if (message.equalsIgnoreCase("/quit")) {
-                        break;
-                    }
-                    broadcast(username + ": " + message);
-                }
-            } catch (IOException e) {
-                System.out.println("Connessione interrotta con " + username);
-            } finally {
-                if (out != null) clientWriters.remove(out);
-                if (username != null) broadcast(username + " ha lasciato la chat.");
-                try {
-                    socket.close(); 
-                } 
-                catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-
-            
-        }
-    } 
 }
