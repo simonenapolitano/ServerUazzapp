@@ -6,6 +6,4 @@ COPY . .
 
 RUN mvn clean package
 
-EXPOSE 10000
-
 CMD ["java", "-jar", "target/uazzappserver-1.0-SNAPSHOT-jar-with-dependencies.jar"]
