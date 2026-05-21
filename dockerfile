@@ -1,12 +1,10 @@
-FROM eclipse-temurin:17-jdk
+FROM maven:3.9.6-eclipse-temurin-17
 
 WORKDIR /app
 
 COPY . .
 
-RUN chmod +x mvnw || true
-
-RUN ./mvnw clean package || mvn clean package
+RUN mvn clean package
 
 EXPOSE 5000
 
